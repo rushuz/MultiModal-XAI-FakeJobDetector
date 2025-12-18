@@ -20,6 +20,10 @@
   letter-spacing: 0.5px;
 }
 
+.navbar-logo span {
+  color: rgb(255, 40, 40);
+}
+
 .navbar-links {
   display: flex;
   gap: 1.5rem;

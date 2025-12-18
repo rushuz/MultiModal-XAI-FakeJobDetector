@@ -1,34 +1,26 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import Navbar from "./Navbar";
-import "./Login.css";
+import Navbar from "../components/Navbar";
+import "../styles/Login.css";
 
-function Register() {
-  const [username, setUsername] = useState("");
+function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const navigate = useNavigate();
 
-  const handleRegister = (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     localStorage.setItem("user", email);
-    alert(`User Registered: ${username}`);
+    alert(`Logged in as: ${email}`);
     navigate("/detection");
   };
 
   return (
     <>
       <Navbar />
-      <div className="register">
-        <h2>Register</h2>
-        <form onSubmit={handleRegister}>
-          <input
-            type="text"
-            placeholder="Username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            required
-          />
+      <div className="login">
+        <h2>Login</h2>
+        <form onSubmit={handleSubmit}>
           <input
             type="email"
             placeholder="Email"
@@ -43,11 +35,11 @@ function Register() {
             onChange={(e) => setPassword(e.target.value)}
             required
           />
-          <button type="submit">Register</button>
+          <button type="submit">Login</button>
         </form>
       </div>
     </>
   );
 }
 
-export default Register;
+export default Login;
