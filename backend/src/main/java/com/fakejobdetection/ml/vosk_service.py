@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify
 import vosk, wave, json, io
 
 app = Flask(__name__)
-model = vosk.Model("vosk-model-small-en-us")
+model = vosk.Model("vosk-model-small-en-us-0.15")
 
 @app.route("/transcribe", methods=["POST"])
 def transcribe():

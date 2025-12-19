@@ -1,11 +1,11 @@
 package com.fakejobdetection.ml;
 
+import java.io.InputStream;
+
 import org.dmg.pmml.PMML;
 import org.jpmml.evaluator.Evaluator;
 import org.jpmml.evaluator.ModelEvaluatorBuilder;
 import org.jpmml.model.PMMLUtil;
-
-import java.io.InputStream;
 
 public class PMMLModelLoader {
 
