@@ -1,28 +1,71 @@
 import pandas as pd
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.pipeline import Pipeline
+from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.preprocessing import StandardScaler
-from sklearn2pmml import sklearn2pmml, PMMLPipeline
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report
+from sklearn2pmml import PMMLPipeline, sklearn2pmml
 
-# Example training data
-data = pd.DataFrame({
-    "keyword_score": [0.9, 0.1, 0.8, 0.2],
-    "sentence_count": [2, 6, 3, 8],
-    "text_length": [120, 800, 150, 1000],
-    "urgent_flag": [1, 0, 1, 0],
-    "no_interview_flag": [1, 0, 1, 0],
-    "label": [1, 0, 1, 0]  # 1 = FAKE, 0 = REAL
-})
+# ---------------------------
+# LOAD DATASET
+# ---------------------------
+# Dataset must already contain extracted features
+# (You can generate them using feature_engineering.py)
 
-X = data.drop("label", axis=1)
-y = data["label"]
+data = pd.read_csv("training_dataset.csv")
 
+FEATURE_COLUMNS = [
+    "keyword_score",
+    "sentence_count",
+    "text_length",
+    "urgent_flag",
+    "no_interview_flag",
+    "ocr_risk_score",
+    "fake_company_flag",
+    "audio_risk_score",
+    "urgency_voice_flag",
+    "payment_voice_flag"
+]
+
+X = data[FEATURE_COLUMNS]
+y = data["label"]  # 1 = FAKE, 0 = REAL
+
+# ---------------------------
+# TRAIN / TEST SPLIT
+# ---------------------------
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42, stratify=y
+)
+
+# ---------------------------
+# MODEL PIPELINE (PMML SAFE)
+# ---------------------------
 pipeline = PMMLPipeline([
     ("scaler", StandardScaler()),
-    ("model", RandomForestClassifier(n_estimators=100, random_state=42))
+    ("classifier", GradientBoostingClassifier(
+        n_estimators=300,
+        learning_rate=0.05,
+        max_depth=5,
+        subsample=0.9,
+        random_state=42
+    ))
 ])
 
-pipeline.fit(X, y)
+pipeline.fit(X_train, y_train)
 
-sklearn2pmml(pipeline, "fake_job_model.pmml", with_repr=True)
-print("PMML model generated successfully")
+# ---------------------------
+# EVALUATION
+# ---------------------------
+y_pred = pipeline.predict(X_test)
+print("\n=== MODEL PERFORMANCE ===")
+print(classification_report(y_test, y_pred))
+
+# ---------------------------
+# EXPORT PMML
+# ---------------------------
+sklearn2pmml(
+    pipeline,
+    "fake_job_multimodal.pmml",
+    with_repr=True
+)
+
+print("\nPMML model exported: fake_job_multimodal.pmml")

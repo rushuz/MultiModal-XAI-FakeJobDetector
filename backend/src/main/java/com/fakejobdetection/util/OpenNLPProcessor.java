@@ -20,19 +20,29 @@ public class OpenNLPProcessor {
             InputStream sentModel =
                     OpenNLPProcessor.class.getResourceAsStream("/models/en-sent.bin");
 
+            if (tokenModel == null || sentModel == null) {
+                throw new RuntimeException("OpenNLP model files not found in /models");
+            }
+
             tokenizer = new TokenizerME(new TokenizerModel(tokenModel));
             sentenceDetector = new SentenceDetectorME(new SentenceModel(sentModel));
 
         } catch (Exception e) {
-            throw new RuntimeException("Failed to load OpenNLP models", e);
+            throw new RuntimeException("Failed to initialize OpenNLPProcessor", e);
         }
     }
 
     public static List<String> tokenize(String text) {
+        if (text == null || text.isBlank()) {
+            return List.of();
+        }
         return Arrays.asList(tokenizer.tokenize(text));
     }
 
     public static int sentenceCount(String text) {
+        if (text == null || text.isBlank()) {
+            return 0;
+        }
         return sentenceDetector.sentDetect(text).length;
     }
 }

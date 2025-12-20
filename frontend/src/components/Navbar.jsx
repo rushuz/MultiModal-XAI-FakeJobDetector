@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import "./Navbar.css";
+import "../styles/Navbar.css";
 
 export default function Navbar() {
   const navigate = useNavigate();
@@ -12,7 +12,7 @@ export default function Navbar() {
 
   return (
     <nav className="navbar">
-      <div className="navbar-logo">FakeJobDetector</div>
+      <div className="navbar-logo"><span>FakeJob</span>Detector</div>
 
       <ul className="navbar-links">
         <li><NavLink to="/">Home</NavLink></li>

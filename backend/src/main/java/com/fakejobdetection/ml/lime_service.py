@@ -5,19 +5,29 @@ from lime.lime_tabular import LimeTabularExplainer
 app = Flask(__name__)
 
 FEATURE_NAMES = [
+    # TEXT
     "keyword_score",
     "sentence_count",
     "text_length",
     "urgent_flag",
-    "no_interview_flag"
+    "no_interview_flag",
+
+    # IMAGE (OCR)
+    "ocr_risk_score",
+    "fake_company_flag",
+
+    # AUDIO
+    "audio_risk_score",
+    "urgency_voice_flag",
+    "payment_voice_flag"
 ]
 
 # Dummy data ONLY to initialize explainer
 training_data = np.array([
-    [0.9, 2, 120, 1, 1],
-    [0.1, 6, 800, 0, 0],
-    [0.8, 3, 150, 1, 1],
-    [0.2, 8, 1000, 0, 0]
+    [0.9, 2, 120, 1, 1, 0.8, 1, 0.7, 1, 1],
+    [0.1, 6, 800, 0, 0, 0.1, 0, 0.2, 0, 0],
+    [0.8, 3, 150, 1, 1, 0.6, 1, 0.5, 1, 0],
+    [0.2, 8, 1000, 0, 0, 0.1, 0, 0.1, 0, 0]
 ])
 
 explainer = LimeTabularExplainer(
@@ -35,8 +45,9 @@ def explain():
         features = data.get("features")
         fake_prob = float(data.get("fake_probability"))
 
-        if features is None or len(features) != 5:
+        if features is None or len(features) != len(FEATURE_NAMES):
             return jsonify({"error": "Invalid feature vector"}), 400
+
 
         instance = np.array(features, dtype=float).reshape(1, -1)
 
@@ -46,12 +57,21 @@ def explain():
             for i, row in enumerate(x):
                 score = 0.0
 
-                # Feature influence (must match training logic)
-                score += row[0] * 0.4            # keyword_score
-                score += row[3] * 0.3            # urgent_flag
-                score += row[4] * 0.3            # no_interview_flag
-                score -= row[1] * 0.05           # sentence_count
-                score -= row[2] * 0.0001         # text_length
+                # TEXT contribution
+                score += row[0] * 0.25
+                score += row[3] * 0.2
+                score += row[4] * 0.15
+                score -= row[1] * 0.05
+                score -= row[2] * 0.0001
+
+                # IMAGE contribution
+                score += row[5] * 0.15
+                score += row[6] * 0.1
+
+                # AUDIO contribution
+                score += row[7] * 0.1
+                score += row[8] * 0.05
+                score += row[9] * 0.05
 
                 score = max(0.0, min(1.0, score))
 
@@ -59,6 +79,7 @@ def explain():
                 probs[i, 0] = 1 - score  # REAL
 
             return probs
+
 
         exp = explainer.explain_instance(
             instance[0],

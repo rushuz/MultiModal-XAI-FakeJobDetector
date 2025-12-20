@@ -11,13 +11,21 @@ import java.util.*;
 @Service
 public class TextAnalysisService {
 
+    private static final RestTemplate REST_TEMPLATE = new RestTemplate();
+
     public AnalysisResult analyze(String text) {
+
+        if (text == null || text.isBlank()) {
+            return null;
+        }
+
+        String normalized = text.toLowerCase(Locale.ROOT);
 
         // ===============================
         // 1. NLP FEATURE EXTRACTION
         // ===============================
 
-        List<String> tokens = OpenNLPProcessor.tokenize(text.toLowerCase());
+        List<String> tokens = OpenNLPProcessor.tokenize(normalized);
         int sentenceCount = OpenNLPProcessor.sentenceCount(text);
 
         double keywordScore = tokens.stream()
@@ -25,7 +33,7 @@ public class TextAnalysisService {
                 .count() * 0.3;
 
         int urgentFlag = tokens.contains("urgent") ? 1 : 0;
-        int noInterviewFlag = text.toLowerCase().contains("no interview") ? 1 : 0;
+        int noInterviewFlag = normalized.contains("no interview") ? 1 : 0;
 
         Map<String, Object> features = new LinkedHashMap<>();
         features.put("keyword_score", keywordScore);
@@ -35,55 +43,46 @@ public class TextAnalysisService {
         features.put("no_interview_flag", noInterviewFlag);
 
         // ===============================
-        // 2. ML PREDICTION (PMML)
+        // 2. ML PREDICTION
         // ===============================
 
-        double fakeProbability =
-                PredictionEngine.predictProbability(features);
-
+        double fakeProbability = PredictionEngine.predictProbability(features);
         String label = fakeProbability >= 0.5 ? "FAKE" : "REAL";
 
         // ===============================
-        // 3. TRUE LIME EXPLANATION
+        // 3. LIME EXPLANATION
         // ===============================
 
         Map<String, Double> limeWeights =
-                getLimeExplanation(features, fakeProbability);
+                Optional.ofNullable(getLimeExplanation(features, fakeProbability))
+                        .orElse(Collections.emptyMap());
 
         // ===============================
-        // 4. BUILD RESPONSE OBJECT
+        // 4. BUILD RESULT
         // ===============================
 
-        // 🔹 CREATE RESULT OBJECT (MISSING BEFORE)
         AnalysisResult result = new AnalysisResult();
         result.setInputText(text);
 
-        // 🔹 FEATURES
         AnalysisResult.Features f = new AnalysisResult.Features();
         f.salaryAnomaly = fakeProbability >= 0.5;
         f.keywordScore = keywordScore;
 
-        // 🔹 PREDICTION
         AnalysisResult.Prediction p = new AnalysisResult.Prediction();
         p.label = label;
         p.confidence = fakeProbability;
 
-        // 🔹 CLEAN + SET EXPLANATION
         AnalysisResult.Explanation e = new AnalysisResult.Explanation();
-
-        Map<String, Double> cleanedWeights = new LinkedHashMap<>();
-        List<String> cleanedReasons = new ArrayList<>();
+        e.reasons = new ArrayList<>();
+        e.weights = new LinkedHashMap<>();
+        e.modalityContributions = Map.of("text", fakeProbability);
 
         for (Map.Entry<String, Double> entry : limeWeights.entrySet()) {
             String cleanKey = normalizeLimeKey(entry.getKey());
-            cleanedWeights.put(cleanKey, entry.getValue());
-            cleanedReasons.add(cleanKey);
+            e.reasons.add(cleanKey);
+            e.weights.put(cleanKey, entry.getValue());
         }
 
-        e.reasons = cleanedReasons;
-        e.weights = cleanedWeights;
-
-        // 🔹 ATTACH EVERYTHING
         result.setFeatures(f);
         result.setPrediction(p);
         result.setExplanation(e);
@@ -91,50 +90,38 @@ public class TextAnalysisService {
         return result;
     }
 
-
-     private String normalizeLimeKey(String key) {
-        if (key.contains("urgent_flag")) {
-            return "Urgent language detected";
-        }
-        if (key.contains("no_interview_flag")) {
-            return "No interview mentioned";
-        }
-        if (key.contains("keyword_score")) {
-            return "Suspicious keywords detected";
-        }
-        if (key.contains("sentence_count")) {
-            return "Unusually short description";
-        }
-        if (key.contains("text_length")) {
-            return "Very short job description";
-        }
+    private String normalizeLimeKey(String key) {
+        if (key.contains("urgent_flag")) return "Urgent language detected";
+        if (key.contains("no_interview_flag")) return "No interview mentioned";
+        if (key.contains("keyword_score")) return "Suspicious keywords detected";
+        if (key.contains("sentence_count")) return "Unusually short description";
+        if (key.contains("text_length")) return "Very short job description";
         return key;
     }
 
-    // =================================================
-    // LIME MICROSERVICE CALL (PYTHON)
-    // =================================================
-
+    @SuppressWarnings("UseSpecificCatch")
     private Map<String, Double> getLimeExplanation(
             Map<String, Object> features,
             double fakeProbability) {
 
-        RestTemplate restTemplate = new RestTemplate();
+        try {
+            Map<String, Object> request = new HashMap<>();
+            request.put("features", new Object[]{
+                    features.get("keyword_score"),
+                    features.get("sentence_count"),
+                    features.get("text_length"),
+                    features.get("urgent_flag"),
+                    features.get("no_interview_flag")
+            });
+            request.put("fake_probability", fakeProbability);
 
-        Map<String, Object> request = new HashMap<>();
-        request.put("features", new Object[]{
-                features.get("keyword_score"),
-                features.get("sentence_count"),
-                features.get("text_length"),
-                features.get("urgent_flag"),
-                features.get("no_interview_flag")
-        });
-        request.put("fake_probability", fakeProbability);
-
-        return restTemplate.postForObject(
-                "http://localhost:5000/explain",
-                request,
-                Map.class
-        );
+            return REST_TEMPLATE.postForObject(
+                    "http://localhost:5000/explain",
+                    request,
+                    Map.class
+            );
+        } catch (Exception e) {
+            return Collections.emptyMap();
+        }
     }
 }
