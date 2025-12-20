@@ -20,7 +20,7 @@ export default function HomePage() {
 
           <div className="hero-actions">
             <button onClick={() => navigate("/detection")}>
-              Analyze a Job
+              Analyze a Job Post
             </button>
             <span className="hero-subtext">
               Transparent • Secure • Research-grade AI
