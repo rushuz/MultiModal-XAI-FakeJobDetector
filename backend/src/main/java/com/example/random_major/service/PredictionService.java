@@ -160,6 +160,40 @@ public class PredictionService {
     }
 
     /**
+     * Combines the structural (PMML + Post-processed) score with the semantic (Groq LLM) score.
+     * Use a weighted average ensemble where the LLM is given higher weight for semantic patterns.
+     *
+     * @param structuralScore Score from PMML and structural adjustments (0-1)
+     * @param semanticScore Score from Groq LLM semantic analysis (0-1)
+     * @return Final unified risk score (0-1)
+     */
+    public double ensembleScores(double structuralScore, double semanticScore) {
+        // High-confidence semantic weighting (Groq is better at catching "fake" language)
+        double structuralWeight = 0.4;
+        double semanticWeight = 0.6;
+
+        double finalScore = (structuralScore * structuralWeight) + (semanticScore * semanticWeight);
+
+        // Agreement Boost: If both scores are high, boost the final result
+        if (structuralScore > 0.7 && semanticScore > 0.7) {
+            finalScore = Math.min(1.0, finalScore + 0.1);
+            log.info("🚀 ENSEMBLE BOOST: Both models agree on HIGH RISK (+0.1)");
+        }
+        // Agreement Reduction: If both scores are very low, reduce the final result
+        else if (structuralScore < 0.2 && semanticScore < 0.2) {
+            finalScore = Math.max(0.0, finalScore - 0.05);
+            log.info("🛡️ ENSEMBLE TRUST: Both models agree on LOW RISK (-0.05)");
+        }
+
+        log.info("📈 Final Ensemble Score: {} (Structural: {}, Semantic: {})", 
+                String.format("%.4f", finalScore), 
+                String.format("%.4f", structuralScore), 
+                String.format("%.4f", semanticScore));
+
+        return finalScore;
+    }
+
+    /**
      * Inner class for post-processing results
      */
     public static class PostProcessingResult {

@@ -1,5 +1,6 @@
 package com.example.random_major.service;
 
+import com.example.random_major.model.GroqAnalysisResult;
 import com.example.random_major.model.LimeExplanation;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -142,6 +143,66 @@ public class LimeService {
         } catch (Exception e) {
             return text.hashCode() + "_" + numFeatures;
         }
+    }
+
+    /**
+     * Calls the Python microservice to get deep semantic analysis via Groq LLM.
+     * This is used to boost detection accuracy for sophisticated scams.
+     */
+    public GroqAnalysisResult analyzeWithGroq(String text) {
+        long t = System.currentTimeMillis();
+        try {
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("text", text);
+
+            String requestJson = objectMapper.writeValueAsString(requestBody);
+            Request request = new Request.Builder()
+                    .url(limeServiceUrl + "/analyze/groq")
+                    .post(RequestBody.create(requestJson, JSON))
+                    .build();
+
+            try (Response response = httpClient.newCall(request).execute()) {
+                long latency = System.currentTimeMillis() - t;
+
+                if (!response.isSuccessful()) {
+                    log.error("Groq analysis call failed with HTTP {}", response.code());
+                    return createErrorGroqResult("HTTP " + response.code(), latency);
+                }
+
+                String body = response.body() != null ? response.body().string() : "{}";
+                JsonNode root = objectMapper.readTree(body);
+
+                if (!root.path("success").asBoolean(false)) {
+                    log.error("Groq analysis reported failure: {}", root.path("error").asText());
+                    return createErrorGroqResult(root.path("error").asText(), latency);
+                }
+
+                GroqAnalysisResult result = objectMapper.convertValue(
+                        root.path("analysis"),
+                        GroqAnalysisResult.class
+                );
+                result.setLatencyMs(latency);
+
+                log.info("Groq analysis COMPLETED: scam_score={}, red_flags={}, latency={}ms",
+                        result.getScamScore(), result.getRedFlags().size(), latency);
+
+                return result;
+            }
+        } catch (Exception e) {
+            long latency = System.currentTimeMillis() - t;
+            log.error("Failed to call Groq analysis: {}", e.getMessage());
+            return createErrorGroqResult(e.getMessage(), latency);
+        }
+    }
+
+    private GroqAnalysisResult createErrorGroqResult(String error, long latency) {
+        GroqAnalysisResult result = new GroqAnalysisResult();
+        result.setReasoning("Error during Groq analysis: " + error);
+        result.setScamScore(0.0);
+        result.setFake(false);
+        result.setRedFlags(Collections.emptyList());
+        result.setLatencyMs(latency);
+        return result;
     }
 
     // ─────────────────────────────────────────────────────────────────

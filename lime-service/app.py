@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
-from explainer import LimeExplainerService
+from explainer import LimeExplainerService, GroqAnalyzer
 from cache import ExplanationCache
 from monitoring import PerformanceMonitor
 
@@ -41,6 +41,9 @@ DEFAULT_NUM_FEATURES = 10
 MAX_NUM_FEATURES     = 30
 MIN_TEXT_LENGTH      = 20
 
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+GROQ_MODEL   = os.environ.get("GROQ_MODEL", "llama-3.1-70b-versatile")
+
 # ──────────────────────────────────────────────────────────
 # Initialise components
 # ──────────────────────────────────────────────────────────
@@ -51,6 +54,13 @@ logger.info("Initialising LIME explainer service...")
 explainer  = LimeExplainerService(model_path=MODEL_PATH or None, num_samples=LIME_NUM_SAMPLES)
 cache      = ExplanationCache(max_size=CACHE_MAX_SIZE, ttl_seconds=CACHE_TTL)
 monitor    = PerformanceMonitor()
+
+groq_analyzer = None
+if GROQ_API_KEY:
+    logger.info("Initialising Groq analyzer service...")
+    groq_analyzer = GroqAnalyzer(api_key=GROQ_API_KEY, model_name=GROQ_MODEL)
+else:
+    logger.warning("GROQ_API_KEY not found in environment — Groq analysis will be disabled.")
 
 logger.info("LIME microservice ready on port %d", SERVICE_PORT)
 
@@ -176,6 +186,45 @@ def explain():
             "success": False,
             "error": f"Explanation generation failed: {str(exc)}",
             "latency_ms": latency_ms
+        }), 500
+
+
+@app.route("/analyze/groq", methods=["POST"])
+def analyze_groq():
+    """
+    Perform deep semantic analysis using Groq LLM.
+    Returns structured scam score and red flags.
+    """
+    if not groq_analyzer:
+        return jsonify({"success": False, "error": "Groq analysis service is not configured."}), 503
+
+    t_start = time.time()
+    try:
+        body = request.get_json(force=True, silent=True) or {}
+        text = body.get("text", "").strip()
+
+        if not text or len(text) < MIN_TEXT_LENGTH:
+            return jsonify({
+                "success": False, 
+                "error": f"Field 'text' must be at least {MIN_TEXT_LENGTH} chars."
+            }), 400
+
+        # Run analysis
+        analysis = groq_analyzer.analyze(text)
+        latency_ms = round((time.time() - t_start) * 1000, 2)
+
+        return jsonify({
+            "success": True,
+            "analysis": analysis.model_dump(),
+            "latency_ms": latency_ms
+        }), 200
+
+    except Exception as exc:
+        logger.exception("Error in /analyze/groq: %s", exc)
+        return jsonify({
+            "success": False,
+            "error": str(exc),
+            "latency_ms": round((time.time() - t_start) * 1000, 2)
         }), 500
 
 

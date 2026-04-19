@@ -6,7 +6,11 @@
 import os
 import pickle
 import logging
+import json
 import numpy as np
+from typing import List, Optional
+from pydantic import BaseModel, Field
+from groq import Groq
 from sklearn.pipeline import Pipeline
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
@@ -60,6 +64,86 @@ SURROGATE_CORPUS = [
     ("Content Writer SEO blog technical writing editorial team communication skills", 0),
     ("Customer Success Manager SaaS churn reduction onboarding renewal rate KPIs", 0),
 ]
+
+# ──────────────────────────────────────────────────────────
+# Groq LLM Analyzer
+# ──────────────────────────────────────────────────────────
+
+class GroqRedFlag(BaseModel):
+    category: str = Field(description="Category of the red flag (e.g., Financial, Urgency, Grammar)")
+    description: str = Field(description="Brief explanation of why this is suspicious")
+    severity: float = Field(description="Severity score between 0 and 1", ge=0, le=1)
+
+class GroqAnalysisResponse(BaseModel):
+    is_fake: bool = Field(description="Classification of the job posting")
+    scam_score: float = Field(description="Probability of being a scam (0 to 1)", ge=0, le=1)
+    reasoning: str = Field(description="Concise reasoning for the classification")
+    red_flags: List[GroqRedFlag] = Field(description="Specific suspicious elements identified")
+
+class GroqAnalyzer:
+    """
+    Leverages Groq LLM to perform deep semantic analysis of job postings.
+    Identifies scam patterns that statistical models might miss.
+    """
+    def __init__(self, api_key: str, model_name: str = "llama-3.1-70b-versatile"):
+        self.client = Groq(api_key=api_key)
+        self.model = model_name
+
+    def analyze(self, text: str) -> GroqAnalysisResponse:
+        """Analyze job text for fraud indicators."""
+        prompt = f"""
+        Analyze the following job posting and determine if it is FAKE (scam/phishing) or REAL.
+        Look for:
+        - Unrealistic salary/benefits
+        - Sense of extreme urgency or pressure
+        - Generic or unprofessional contact information
+        - Requests for personal info or money upfront
+        - Poor grammar/formatting inconsistent with professional standards
+        - Vague job requirements combined with high pay
+
+        Job Posting Text:
+        ---
+        {text}
+        ---
+
+        Provide your response as a valid JSON object matching this schema:
+        {{
+            "is_fake": boolean,
+            "scam_score": float (0-1),
+            "reasoning": "brief explanation",
+            "red_flags": [
+                {{ "category": "Grammar", "description": "text...", "severity": 0.5 }}
+            ]
+        }}
+        """
+
+        try:
+            completion = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {
+                        "role": "system", 
+                        "content": "You are an expert fraud investigator specializing in job recruitment scams. Return JSON."
+                    },
+                    {"role": "user", "content": prompt}
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.1
+            )
+            
+            content = completion.choices[0].message.content
+            # Validate with Pydantic
+            data = GroqAnalysisResponse.model_validate_json(content)
+            return data
+        except Exception as e:
+            logger.error(f"Groq analysis failed: {str(e)}")
+            # Fallback response
+            return GroqAnalysisResponse(
+                is_fake=False,
+                scam_score=0.0,
+                reasoning=f"Analysis failed: {str(e)}",
+                red_flags=[]
+            )
 
 
 class LimeExplainerService:

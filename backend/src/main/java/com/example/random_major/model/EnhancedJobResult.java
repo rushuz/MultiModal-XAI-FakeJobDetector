@@ -58,6 +58,12 @@ public class EnhancedJobResult {
     @JsonProperty("extractedDomain")
     private String extractedDomain; // Auto-extracted domain from text
 
+    @JsonProperty("groqScore")
+    private double groqScore; // Score from Groq semantic analysis (0-1)
+
+    @JsonProperty("groqReasoning")
+    private String groqReasoning; // Reasoning from Groq analysis
+
     public EnhancedJobResult() {}
 
     public EnhancedJobResult(String prediction, double confidenceScore, double baseModelScore) {
@@ -194,5 +200,21 @@ public class EnhancedJobResult {
 
     public void setExtractedDomain(String extractedDomain) {
         this.extractedDomain = extractedDomain;
+    }
+
+    public double getGroqScore() {
+        return groqScore;
+    }
+
+    public void setGroqScore(double groqScore) {
+        this.groqScore = groqScore;
+    }
+
+    public String getGroqReasoning() {
+        return groqReasoning;
+    }
+
+    public void setGroqReasoning(String groqReasoning) {
+        this.groqReasoning = groqReasoning;
     }
 }

@@ -14,6 +14,7 @@ import com.example.random_major.entity.JobRecord;
 import com.example.random_major.model.CompanyVerificationResponse;
 import com.example.random_major.model.DomainValidationResponse;
 import com.example.random_major.model.EnhancedJobResult;
+import com.example.random_major.model.GroqAnalysisResult;
 import com.example.random_major.model.JobResult;
 import com.example.random_major.repository.JobRecordRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -321,15 +322,39 @@ public class JobAnalysisService {
             log.info("   Prediction: {}", baseModelScore >= 0.5 ? "FAKE" : "REAL");
 
             // ═══════════════════════════════════════════════════════════
+            // STEP 3.5: GROQ SEMANTIC ANALYSIS (High-fidelity LLM scan)
+            // ═══════════════════════════════════════════════════════════
+            log.info("🤖 STEP 3.5: Running Groq LLM semantic analysis...");
+            GroqAnalysisResult groqResult = limeService.analyzeWithGroq(jobText);
+            double groqScore = groqResult.getScamScore();
+            log.info("✅ Groq analysis completed - Scam Score: {}%", (int)(groqScore * 100));
+
+            // ═══════════════════════════════════════════════════════════
             // STEP 4: RED FLAG DETECTION (same logic for all input types)
             // ═══════════════════════════════════════════════════════════
             log.info("🚩 STEP 4: Running red flag detection on {} input...", normalizedInputType);
             java.util.List<com.example.random_major.model.RedFlag> redFlags = 
                     redFlagDetectionService.detectRedFlags(jobText);
+            
+            log.info("✅ Heuristic red flag detection COMPLETED");
+            log.info("   Heuristic flags found: {}", redFlags.size());
+            
+            // Add Groq-detected red flags to the list
+            if (groqResult.getRedFlags() != null) {
+                for (GroqAnalysisResult.GroqRedFlag gFlag : groqResult.getRedFlags()) {
+                    com.example.random_major.model.RedFlag rf = new com.example.random_major.model.RedFlag(
+                        gFlag.getCategory().toUpperCase(),
+                        gFlag.getSeverity(),
+                        gFlag.getDescription(),
+                        "LLM_SEMANTIC_ANALYSIS"
+                    );
+                    redFlags.add(rf);
+                }
+            }
+            log.info("   Total red flags (Heuristic + Groq): {}", redFlags.size());
+            
             double redFlagScore = redFlagDetectionService.calculateRedFlagScore(redFlags);
-            log.info("✅ Red flag detection COMPLETED (applied to {} input)", normalizedInputType);
-            log.info("   Red flags detected: {}", redFlags.size());
-            log.info("   Red flag score: {} (severity)", redFlagScore);
+            log.info("   Unified red flag score: {}", redFlagScore);
 
             // ═══════════════════════════════════════════════════════════
             // STEP 5: COMPANY VERIFICATION (using extracted/provided company name)
@@ -399,7 +424,11 @@ public class JobAnalysisService {
                         domainValidation
                     );
             
-            double postProcessedScore = postProcessing.getAdjustedScore();
+            // Integrate Groq score into final adjustment
+            double adjustedScore = postProcessing.getAdjustedScore();
+            double hybridScore = predictionService.ensembleScores(adjustedScore, groqScore);
+            
+            double postProcessedScore = hybridScore;
             double adjustmentFactor = postProcessing.getAdjustmentFactor();
             
             if (redFlagScore > 0) {
@@ -448,11 +477,16 @@ public class JobAnalysisService {
             enhancedResult.setRedFlagsDetected(redFlags);
             enhancedResult.setExternalValidationInfluence(
                 postProcessing.getExternalValidationNote() + "\n" +
+                "Groq LLM Intelligence: " + groqResult.getReasoning() + "\n" +
                 redFlagDetectionService.formatRedFlagsForNote(redFlags, redFlagScore)
             );
             enhancedResult.setCacheStatus(limeResult.cacheStatus);
             enhancedResult.setExplanationLatencyMs(limeResult.latencyMs);
             enhancedResult.setGcsUrl(limeResult.gcsUrl);
+            
+            // Set Groq-specific insights
+            enhancedResult.setGroqScore(groqScore);
+            enhancedResult.setGroqReasoning(groqResult.getReasoning());
             
             // ✅ SET EXTRACTED DATA IN RESPONSE
             enhancedResult.setExtractedCompanyName(extractedData.getCompanyName());
