@@ -202,6 +202,7 @@ def analyze_groq():
     try:
         body = request.get_json(force=True, silent=True) or {}
         text = body.get("text", "").strip()
+        company_name = body.get("company_name", "").strip()
 
         if not text or len(text) < MIN_TEXT_LENGTH:
             return jsonify({
@@ -210,7 +211,7 @@ def analyze_groq():
             }), 400
 
         # Run analysis
-        analysis = groq_analyzer.analyze(text)
+        analysis = groq_analyzer.analyze(text, company_name=company_name or None)
         latency_ms = round((time.time() - t_start) * 1000, 2)
 
         return jsonify({

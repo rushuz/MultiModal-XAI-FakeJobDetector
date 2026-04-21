@@ -325,7 +325,7 @@ public class JobAnalysisService {
             // STEP 3.5: GROQ SEMANTIC ANALYSIS (High-fidelity LLM scan)
             // ═══════════════════════════════════════════════════════════
             log.info("🤖 STEP 3.5: Running Groq LLM semantic analysis...");
-            GroqAnalysisResult groqResult = limeService.analyzeWithGroq(jobText);
+            GroqAnalysisResult groqResult = limeService.analyzeWithGroq(jobText, companyNameForValidation);
             double groqScore = groqResult.getScamScore();
             log.info("✅ Groq analysis completed - Scam Score: {}%", (int)(groqScore * 100));
 
@@ -426,7 +426,11 @@ public class JobAnalysisService {
             
             // Integrate Groq score into final adjustment
             double adjustedScore = postProcessing.getAdjustedScore();
-            double hybridScore = predictionService.ensembleScores(adjustedScore, groqScore);
+            double hybridScore = predictionService.ensembleScores(
+                adjustedScore, 
+                groqScore, 
+                groqResult.isHasPlacementHistory()
+            );
             
             double postProcessedScore = hybridScore;
             double adjustmentFactor = postProcessing.getAdjustmentFactor();
@@ -487,6 +491,8 @@ public class JobAnalysisService {
             // Set Groq-specific insights
             enhancedResult.setGroqScore(groqScore);
             enhancedResult.setGroqReasoning(groqResult.getReasoning());
+            enhancedResult.setHasPlacementHistory(groqResult.isHasPlacementHistory());
+            enhancedResult.setPlacementSummary(groqResult.getPlacementSummary());
             
             // ✅ SET EXTRACTED DATA IN RESPONSE
             enhancedResult.setExtractedCompanyName(extractedData.getCompanyName());

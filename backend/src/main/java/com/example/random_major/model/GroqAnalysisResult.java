@@ -8,6 +8,11 @@ public class GroqAnalysisResult {
     private String reasoning;
     private List<GroqRedFlag> redFlags;
     private long latencyMs;
+    @com.fasterxml.jackson.annotation.JsonProperty("has_placement_history")
+    private boolean hasPlacementHistory;
+
+    @com.fasterxml.jackson.annotation.JsonProperty("placement_summary")
+    private String placementSummary;
 
     public GroqAnalysisResult() {}
 
@@ -25,6 +30,12 @@ public class GroqAnalysisResult {
 
     public long getLatencyMs() { return latencyMs; }
     public void setLatencyMs(long latencyMs) { this.latencyMs = latencyMs; }
+
+    public boolean isHasPlacementHistory() { return hasPlacementHistory; }
+    public void setHasPlacementHistory(boolean hasPlacementHistory) { this.hasPlacementHistory = hasPlacementHistory; }
+
+    public String getPlacementSummary() { return placementSummary; }
+    public void setPlacementSummary(String placementSummary) { this.placementSummary = placementSummary; }
 
     public static class GroqRedFlag {
         private String category;

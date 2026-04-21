@@ -78,6 +78,8 @@ class GroqAnalysisResponse(BaseModel):
     is_fake: bool = Field(description="Classification of the job posting")
     scam_score: float = Field(description="Probability of being a scam (0 to 1)", ge=0, le=1)
     reasoning: str = Field(description="Concise reasoning for the classification")
+    has_placement_history: bool = Field(description="True if company has documented university placement records")
+    placement_summary: str = Field(description="Summary of placement evidence or lack thereof")
     red_flags: List[GroqRedFlag] = Field(description="Specific suspicious elements identified")
 
 class GroqAnalyzer:
@@ -89,8 +91,8 @@ class GroqAnalyzer:
         self.client = Groq(api_key=api_key)
         self.model = model_name
 
-    def analyze(self, text: str) -> GroqAnalysisResponse:
-        """Analyze job text for fraud indicators."""
+    def analyze(self, text: str, company_name: Optional[str] = None) -> GroqAnalysisResponse:
+        """Analyze job text for fraud indicators and placement history."""
         prompt = f"""
         Analyze the following job posting and determine if it is FAKE (scam/phishing) or REAL.
         Look for:
@@ -100,17 +102,22 @@ class GroqAnalyzer:
         - Requests for personal info or money upfront
         - Poor grammar/formatting inconsistent with professional standards
         - Vague job requirements combined with high pay
+        - Documented university placement history and campus recruitment track record
 
         Job Posting Text:
         ---
         {text}
         ---
 
+        Expected Company: {company_name or "Not explicitly provided (extract from text if possible)"}
+
         Provide your response as a valid JSON object matching this schema:
         {{
             "is_fake": boolean,
             "scam_score": float (0-1),
             "reasoning": "brief explanation",
+            "has_placement_history": boolean,
+            "placement_summary": "evidence of student placement history or lack thereof",
             "red_flags": [
                 {{ "category": "Grammar", "description": "text...", "severity": 0.5 }}
             ]
@@ -142,6 +149,8 @@ class GroqAnalyzer:
                 is_fake=False,
                 scam_score=0.0,
                 reasoning=f"Analysis failed: {str(e)}",
+                has_placement_history=False,
+                placement_summary="Unable to verify placement history due to analysis error.",
                 red_flags=[]
             )
 

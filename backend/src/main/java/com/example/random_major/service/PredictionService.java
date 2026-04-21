@@ -165,12 +165,20 @@ public class PredictionService {
      *
      * @param structuralScore Score from PMML and structural adjustments (0-1)
      * @param semanticScore Score from Groq LLM semantic analysis (0-1)
+     * @param hasPlacementHistory Whether the company has a verified history of student placements at universities
      * @return Final unified risk score (0-1)
      */
-    public double ensembleScores(double structuralScore, double semanticScore) {
+    public double ensembleScores(double structuralScore, double semanticScore, boolean hasPlacementHistory) {
         // High-confidence semantic weighting (Groq is better at catching "fake" language)
         double structuralWeight = 0.4;
         double semanticWeight = 0.6;
+        
+        // Trust Boost: If company has verified placement history, we trust it more
+        if (hasPlacementHistory) {
+            semanticWeight = 0.8; // Trust the AI's "Genuine" assessment more
+            structuralWeight = 0.2;
+            log.info("🎓 PLACEMENT TRUST BOOST: Verified hiring history found. Increasing semantic weight to 0.8");
+        }
 
         double finalScore = (structuralScore * structuralWeight) + (semanticScore * semanticWeight);
 
@@ -183,6 +191,12 @@ public class PredictionService {
         else if (structuralScore < 0.2 && semanticScore < 0.2) {
             finalScore = Math.max(0.0, finalScore - 0.05);
             log.info("🛡️ ENSEMBLE TRUST: Both models agree on LOW RISK (-0.05)");
+        }
+        
+        // Final Placement confidence boost: If has placement history, the score should rarely be "FAKE"
+        if (hasPlacementHistory && finalScore > 0.5) {
+            finalScore = Math.max(0.35, finalScore - 0.2); // Significant reduction but still keeps some risk if score was very high
+            log.info("🎓 PLACEMENT CONFIDENCE: Reducing risk score due to documented student placements (-0.2)");
         }
 
         log.info("📈 Final Ensemble Score: {} (Structural: {}, Semantic: {})", 

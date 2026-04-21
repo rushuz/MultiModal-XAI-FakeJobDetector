@@ -149,11 +149,14 @@ public class LimeService {
      * Calls the Python microservice to get deep semantic analysis via Groq LLM.
      * This is used to boost detection accuracy for sophisticated scams.
      */
-    public GroqAnalysisResult analyzeWithGroq(String text) {
+    public GroqAnalysisResult analyzeWithGroq(String text, String companyName) {
         long t = System.currentTimeMillis();
         try {
             Map<String, Object> requestBody = new HashMap<>();
             requestBody.put("text", text);
+            if (companyName != null && !companyName.isEmpty()) {
+                requestBody.put("company_name", companyName);
+            }
 
             String requestJson = objectMapper.writeValueAsString(requestBody);
             Request request = new Request.Builder()

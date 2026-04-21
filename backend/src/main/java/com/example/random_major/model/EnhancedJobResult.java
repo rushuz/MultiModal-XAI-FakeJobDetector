@@ -64,6 +64,12 @@ public class EnhancedJobResult {
     @JsonProperty("groqReasoning")
     private String groqReasoning; // Reasoning from Groq analysis
 
+    @JsonProperty("hasPlacementHistory")
+    private boolean hasPlacementHistory;
+
+    @JsonProperty("placementSummary")
+    private String placementSummary;
+
     public EnhancedJobResult() {}
 
     public EnhancedJobResult(String prediction, double confidenceScore, double baseModelScore) {
@@ -216,5 +222,21 @@ public class EnhancedJobResult {
 
     public void setGroqReasoning(String groqReasoning) {
         this.groqReasoning = groqReasoning;
+    }
+
+    public boolean isHasPlacementHistory() {
+        return hasPlacementHistory;
+    }
+
+    public void setHasPlacementHistory(boolean hasPlacementHistory) {
+        this.hasPlacementHistory = hasPlacementHistory;
+    }
+
+    public String getPlacementSummary() {
+        return placementSummary;
+    }
+
+    public void setPlacementSummary(String placementSummary) {
+        this.placementSummary = placementSummary;
     }
 }
